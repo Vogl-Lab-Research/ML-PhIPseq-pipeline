@@ -16,9 +16,9 @@ import importlib
 class Config:
     def __init__(self,
                  config_file,
-                 metadata_dir = None, data_dir = None,
-                 project = None, lib_meta_data = None, group_tests = None,
-                 data_types=None, meta_typefile=None,
+                 library_dir = None, metadata_dir = None, data_dir = None,
+                 project = None, library_metadata = None, group_tests = None,
+                 data_types=None,
                  col_sample_name=None, col_target=None, col_predict=None,
                  random_state=None, extra_features_to_include=None,
                  entropy_threshold=None,
@@ -36,15 +36,14 @@ class Config:
                  fillna=None, libraries_prefixes=None, return_train=None, return_test=None
                  ):
         # Mandatory to set
+        self.library_dir = Path(library_dir) if isinstance(library_dir, str) else None
         self.metadata_dir = Path(metadata_dir) if isinstance(metadata_dir, str) else None
         self.data_dir = Path(data_dir) if isinstance(data_dir, str) else None
         self.project = project if isinstance(project, str) else None
-        self.lib_meta_data = lib_meta_data if isinstance(lib_meta_data, str) else None
+        self.lib_meta_data = library_metadata if isinstance(library_metadata, str) else None
         self.group_tests = group_tests if isinstance(group_tests, str) else None
 
         #default values
-        self.meta_typefile = meta_typefile if isinstance(meta_typefile,
-                                                         str) else 'excel'  # Default excel, must be set explicitly ('excel' or 'csv')
         self.col_sample_name = col_sample_name if isinstance(col_sample_name, str) else 'SampleName'
         self.col_target = col_target if isinstance(col_target, str) else 'group_test'
         self.col_predict = col_predict if isinstance(col_predict, str) else 'class1_proba'
@@ -434,13 +433,19 @@ class MetadataHandler:
         return ind_meta[combined_filter]
 
     def get_individuals_metadata_df(self):
-        # Load metadata based on file type
-        if self.config.meta_typefile == 'excel':
-            ind_meta = pd.read_excel(Path(self.config.metadata_dir) / f'{self.config.project}_metadata.xlsx', sheet_name=0, index_col=self.config.col_sample_name)
-        elif self.config.meta_typefile == 'csv':
-            ind_meta = pd.read_csv(Path(self.config.metadata_dir) / f'{self.config.project}_metadata.csv', index_col=self.config.col_sample_name, low_memory=False)
+        # Build the base file path without extension.
+        metadata_path = Path(self.config.metadata_dir) / f'{self.config.project}_metadata'
+
+        # Check for the excel version first.
+        excel_file = metadata_path.with_suffix('.xlsx')
+        csv_file = metadata_path.with_suffix('.csv')
+
+        if excel_file.exists():
+            ind_meta = pd.read_excel(excel_file, sheet_name=0, index_col=self.config.col_sample_name)
+        elif csv_file.exists():
+            ind_meta = pd.read_csv(csv_file, index_col=self.config.col_sample_name, low_memory=False)
         else:
-            raise ValueError(f"Invalid file type: {self.config.meta_typefile}. Expected 'csv' or 'excel'.")
+            raise ValueError("No Sample metadata file found. Expected a file with suffix '.xlsx' or '.csv'.")
 
         # Drop unnamed numeric columns
         unnamed_col = ind_meta.columns[ind_meta.columns.str.match(r'^Unnamed')].tolist()
